@@ -88,7 +88,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.6.1")
     implementation("androidx.navigation:navigation-compose:2.6.0")
-    implementation("androidx.security:security-crypto:1.0.0-alpha02")
+    implementation("androidx.security:security-crypto:1.1.0-alpha02")
     implementation("androidx.fragment:fragment:1.3.0")
 
     //Room
@@ -101,6 +101,8 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     ksp("androidx.room:room-compiler:${rootProject.extra["room_version"]}")
     implementation("androidx.room:room-ktx:${rootProject.extra["room_version"]}")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
 
     // Testing
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")

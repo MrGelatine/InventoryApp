@@ -16,12 +16,10 @@
 
 package com.example.inventory.ui.item
 
-import android.Manifest
+import FileHelper
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
-import android.os.ParcelFileDescriptor
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -59,10 +57,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat.startActivity
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.security.crypto.EncryptedFile
 import com.example.inventory.InventoryTopAppBar
 import com.example.inventory.R
 import com.example.inventory.data.Item
@@ -70,7 +68,7 @@ import com.example.inventory.ui.AppViewModelProvider
 import com.example.inventory.ui.navigation.NavigationDestination
 import com.google.gson.Gson
 import kotlinx.coroutines.launch
-import java.io.FileOutputStream
+import java.io.File
 
 
 object ItemDetailsDestination : NavigationDestination {
@@ -165,21 +163,24 @@ private fun ItemDetailsBody(
         }
 
     val context = LocalContext.current
-    val imagePicker = rememberLauncherForActivityResult(
+    val directoryPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree(),
         onResult = { uri ->
-            val content = Gson().toJson(viewModel.uiState.value.itemDetails)
-
-            val key = viewModel.generateKey("1234567891234567")
-            val encrypt = viewModel.encryptMsg(content, key)
-            //val decrypt = viewModel.decryptMsg(encrypt, key)
+            val content = Gson().toJson(viewModel.uiState.value.itemDetails).toByteArray()
 
             val directory: DocumentFile? = DocumentFile.fromTreeUri(context, uri!!)
-            val file: DocumentFile? = directory!!.createFile("text/*", "${viewModel.uiState.value.itemDetails.name} - ${viewModel.uiState.value.itemDetails.provider_name}")
-            val pfd:ParcelFileDescriptor? = context.contentResolver.openFileDescriptor(file!!.uri, "w")
-            val fos = FileOutputStream(pfd!!.fileDescriptor)
-            fos.write(encrypt)
-            fos.close()
+            val dPath: DocumentFile? = directory!!.createFile("text/*", "${viewModel.uiState.value.itemDetails.name} - ${viewModel.uiState.value.itemDetails.provider_name}")
+            val real_path = dPath?.let { FileHelper.getRealPathFromURI(context, it.uri) }
+            dPath!!.delete()
+            val file = File(real_path)
+            val encryptedFile = EncryptedFile.Builder(
+                context,
+                file,
+                viewModel.masterKey,
+                EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
+            ).build()
+            val encryptedOutputStream = encryptedFile.openFileOutput()
+            encryptedOutputStream.write(content)
         }
     )
     Column(
@@ -225,7 +226,7 @@ private fun ItemDetailsBody(
         }
         OutlinedButton(
             onClick = {
-                imagePicker.launch(null)
+                directoryPicker.launch(null)
             },
             shape = MaterialTheme.shapes.small,
             enabled = true,

@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.security.crypto.EncryptedFile
 import com.example.inventory.InventoryTopAppBar
 import com.example.inventory.R
 import com.example.inventory.ui.AppViewModelProvider
@@ -50,7 +51,11 @@ import com.example.inventory.ui.navigation.NavigationDestination
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import java.io.File
 import java.io.FileInputStream
+import java.nio.charset.Charset
 import java.util.Currency
 import java.util.Locale
 
@@ -114,22 +119,30 @@ fun ItemEntryBody(
         contract = ActivityResultContracts.GetContent(),
         onResult = { uri ->
             val viewModel = viewModel as ItemEntryViewModel
-            val key = viewModel.generateKey("1234567891234567")
 
-            val file: DocumentFile? = DocumentFile.fromSingleUri(context, uri!!)
-            val pfd: ParcelFileDescriptor? = context.contentResolver.openFileDescriptor(file!!.uri, "r")
-            val fos = FileInputStream(pfd!!.fileDescriptor)
-            var encrypt = fos.readBytes()
-            fos.close()
-            try {
-                val decrypt = viewModel.decryptMsg(encrypt, key)
-                var item = Gson().fromJson(decrypt, ItemDetails::class.java)
-                item = item.copy(id = itemUiState.itemDetails.id, source = "file")
-                viewModel.updateUiState(item)
-            }catch (e:Exception){
+            val dPath: DocumentFile? = DocumentFile.fromSingleUri(context, uri!!)
+            val real_path = dPath?.let { FileHelper.getRealPathFromURI(context, it.uri) }
+            val file = File(real_path)
+            val encryptedFile = EncryptedFile.Builder(
+                context,
+                file,
+                viewModel.masterKey,
+                EncryptedFile.FileEncryptionScheme.AES256_GCM_HKDF_4KB
+            ).build()
+            val encryptedInputStream = encryptedFile.openFileInput()
+            val content = String(encryptedInputStream.readBytes(), Charset.defaultCharset())
+            val data = Json.parseToJsonElement(content).jsonObject.toMap()
 
-            }
-            onSaveClick()
+            val id = data["id"].toString().toInt()
+            val name = data["name"].toString().substring(1, data["name"].toString().length-1)
+            val price = data["price"].toString().substring(1, data["price"].toString().length-1)
+            val quantity = data["quantity"].toString().substring(1, data["quantity"].toString().length-1)
+            val provider_name = data["provider_name"].toString().substring(1, data["provider_name"].toString().length-1)
+            val provider_email = data["provider_email"].toString().substring(1, data["provider_email"].toString().length-1)
+            val provider_phone = data["provider_phone"].toString().substring(1, data["provider_phone"].toString().length-1)
+            val source = data["source"].toString().substring(1, data["source"].toString().length-2)
+            val details = ItemDetails(id, name, price, quantity, provider_name, provider_email, provider_phone, source)
+            onItemValueChange(details)
         }
     )
     Column(

@@ -22,9 +22,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import androidx.security.crypto.MasterKeys
 import com.example.inventory.data.Item
 import com.example.inventory.data.ItemsRepository
+import com.google.gson.JsonElement
 import java.nio.charset.Charset
 import java.text.NumberFormat
 import javax.crypto.Cipher
@@ -43,16 +45,9 @@ class ItemEntryViewModel(private val itemsRepository: ItemsRepository, applicati
         EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
-    fun generateKey(appName: String): SecretKey? {
-        return SecretKeySpec(appName.toByteArray(), "AES")
-    }
-    fun decryptMsg(cipherText: ByteArray?, secret: SecretKey?): String? {
-        /* Decrypt the message, given derived encContentValues and initialization vector. */
-        var cipher: Cipher? = null
-        cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
-        cipher.init(Cipher.DECRYPT_MODE, secret)
-        return String(cipher.doFinal(cipherText), Charset.defaultCharset())
-    }
+    var masterKey: MasterKey = MasterKey.Builder(applicationContext)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
     /**
      * Holds current item ui state
      */
@@ -84,7 +79,7 @@ class ItemEntryViewModel(private val itemsRepository: ItemsRepository, applicati
 
     private fun validateInput(uiState: ItemDetails = itemUiState.itemDetails): Boolean {
         return with(uiState) {
-            name.isNotBlank() && price.isNotBlank() && quantity.isNotBlank() && (provider_email.isBlank() or """\S+\@\S+\.(com|ru)""".toRegex().containsMatchIn(provider_email)) && (provider_phone.isBlank() || """(\d){9}""".toRegex().matches(provider_phone))
+            name.isNotBlank() && price.isNotBlank() && quantity.isNotBlank() && (provider_email.isBlank() or """\S+\@\S+\.(com|ru)""".toRegex().containsMatchIn(provider_email)) && (provider_phone.isBlank() || """(\d){11}""".toRegex().matches(provider_phone))
         }
     }
 }
@@ -98,15 +93,17 @@ data class ItemUiState(
 )
 
 data class ItemDetails(
-    val id: Int = 0,
-    val name: String = "",
-    val price: String = "",
-    val quantity: String = "",
-    val provider_name: String = "",
-    val provider_email: String = "",
-    val provider_phone: String = "",
-    val source: String = "manual"
-)
+    var id: Int = 0,
+    var name: String = "",
+    var price: String = "",
+    var quantity: String = "",
+    var provider_name: String = "",
+    var provider_email: String = "",
+    var provider_phone: String = "",
+    var source: String = "manual"
+
+){
+}
 
 /**
  * Extension function to convert [ItemUiState] to [Item]. If the value of [ItemDetails.price] is
