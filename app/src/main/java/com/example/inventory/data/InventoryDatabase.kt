@@ -20,10 +20,15 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import net.sqlcipher.database.SQLiteDatabase
+import net.sqlcipher.database.SupportFactory
+import java.io.IOException
 
 /**
  * Database class with a singleton Instance object.
  */
+private const val DB_NAME = "item_database"
+private const val DUMMY_PASSWORD = "password"
 @Database(entities = [Item::class], version = 1, exportSchema = false)
 abstract class InventoryDatabase : RoomDatabase() {
 
@@ -33,15 +38,46 @@ abstract class InventoryDatabase : RoomDatabase() {
         @Volatile
         private var Instance: InventoryDatabase? = null
 
-        fun getDatabase(context: Context): InventoryDatabase {
+        fun getDatabase(context: Context,password: String = DUMMY_PASSWORD): InventoryDatabase {
             // if the Instance is not null, return it, otherwise create a new database instance.
             return Instance ?: synchronized(this) {
+                val dbFile = context.getDatabasePath(DB_NAME)
+                val passphrase = "password".toByteArray()
+                val state = SQLCipherUtils.getDatabaseState(context, dbFile)
+                if(state == SQLCipherUtils.State.UNENCRYPTED){
+                    val dbTemp = context.getDatabasePath("_temp")
+
+                    dbTemp.delete()
+
+                    SQLCipherUtils.encryptTo(context,dbFile,dbTemp,passphrase)
+
+                    val dbBackup = context.getDatabasePath("_backup")
+
+                    if(dbFile.renameTo(dbBackup)){
+                        if(dbTemp.renameTo(dbFile)){
+                            dbBackup.delete()
+                        }else{
+                            dbBackup.renameTo(dbFile)
+                            throw IOException("Could not rename $dbTemp to $dbFile")
+                        }
+                    }else{
+                        dbTemp.delete()
+                        throw IOException("Could not rename $dbFile to $dbBackup")
+                    }
+                }
+
+                return Room.databaseBuilder(context, InventoryDatabase::class.java, DB_NAME)
+                    .openHelperFactory(SupportFactory(passphrase))
+                    .build()
+
+                val supportFactory = SupportFactory(SQLiteDatabase.getBytes(password.toCharArray()))
                 Room.databaseBuilder(context, InventoryDatabase::class.java, "item_database")
                     /**
                      * Setting this option in your app's database builder means that Room
                      * permanently deletes all data from the tables in your database when it
                      * attempts to perform a migration with no defined migration path.
                      */
+                    .openHelperFactory(supportFactory)
                     .fallbackToDestructiveMigration()
                     .build()
                     .also { Instance = it }

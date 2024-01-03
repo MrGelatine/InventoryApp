@@ -17,6 +17,12 @@
 package com.example.inventory.data
 
 import android.content.Context
+import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import androidx.security.crypto.MasterKey
+import androidx.security.crypto.MasterKeys
+import java.security.KeyStore
 
 /**
  * App container for Dependency injection.
@@ -33,6 +39,19 @@ class AppDataContainer(private val context: Context) : AppContainer {
      * Implementation for [ItemsRepository]
      */
     override val itemsRepository: ItemsRepository by lazy {
-        OfflineItemsRepository(InventoryDatabase.getDatabase(context).itemDao())
+        val advancedSpec = KeyGenParameterSpec.Builder(
+            "db_key",
+            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+        ).apply {
+            setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            setKeySize(256)
+            setUserAuthenticationRequired(true)
+            setUserAuthenticationValidityDurationSeconds(15)
+
+        }.build()
+
+        val key = MasterKeys.getOrCreate(advancedSpec)
+        OfflineItemsRepository(InventoryDatabase.getDatabase(context, key).itemDao(), )
     }
 }
